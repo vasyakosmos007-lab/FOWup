@@ -96,6 +96,86 @@
             color: #4ecca3;
             font-size: 0.9em;
         }
+        .summary {
+            background-color: #0f3460;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .summary h2 {
+            color: #4ecca3;
+            border-bottom: 2px solid #4ecca3;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .summary-box {
+            background-color: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .priority-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .priority-list li {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            background-color: #16213e;
+            display: flex;
+            justify-content: space-between;
+        }
+        .skill-badge {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .skill-poor { background-color: #e94560; }
+        .skill-fair { background-color: #FFA500; }
+        .skill-good { background-color: #4ecca3; }
+        .skill-excellent { background-color: #0070DE; }
+        .missing-classes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .class-tag {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .role-stats {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .role-stat {
+            padding: 10px;
+        }
+        .role-stat span {
+            display: block;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .save-status {
+            text-align: center;
+            margin-top: 10px;
+            color: #4ecca3;
+            font-size: 0.9em;
+            height: 20px;
+        }
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -104,6 +184,7 @@
         
         <div class="controls">
             <button id="add-player">Добавить игрока</button>
+            <button id="clear-data">Очистить все данные</button>
         </div>
         
         <table id="players-table">
@@ -122,8 +203,34 @@
             </tbody>
         </table>
         
+        <div class="save-status" id="save-status"></div>
+        
+        <div class="summary">
+            <h2>Сводка по гильдии</h2>
+            <div class="summary-grid">
+                <div class="summary-box">
+                    <h3>Отсутствующие классы</h3>
+                    <div id="missing-classes" class="missing-classes">
+                        <!-- Список отсутствующих классов -->
+                    </div>
+                </div>
+                <div class="summary-box">
+                    <h3>Распределение по ролям</h3>
+                    <div id="role-stats" class="role-stats">
+                        <!-- Статистика по ролям -->
+                    </div>
+                </div>
+                <div class="summary-box" style="grid-column: 1 / -1;">
+                    <h3>Приоритетный список игроков</h3>
+                    <ul id="priority-list" class="priority-list">
+                        <!-- Приоритетный список игроков -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
         <div class="footer">
-            Создано для учета игроков в рейдах
+            Создано для учета игроков в рейдах | Данные сохраняются автоматически
         </div>
     </div>
 
@@ -131,6 +238,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             const playersTable = document.getElementById('players-table');
             const addPlayerBtn = document.getElementById('add-player');
+            const clearDataBtn = document.getElementById('clear-data');
+            const missingClassesEl = document.getElementById('missing-classes');
+            const roleStatsEl = document.getElementById('role-stats');
+            const priorityListEl = document.getElementById('priority-list');
+            const saveStatusEl = document.getElementById('save-status');
             
             // Данные для выпадающих списков
             const classes = [
@@ -150,11 +262,42 @@
             ];
             
             const roles = ['Танк', 'Хил', 'ДД'];
-            const skillLevels = ['Плохо', 'Неплохо', 'Хорошо', 'Отлично'];
+            const skillLevels = [
+                {name: 'Плохо', value: 1},
+                {name: 'Неплохо', value: 2},
+                {name: 'Хорошо', value: 3},
+                {name: 'Отлично', value: 4}
+            ];
+            
+            // Приоритет классов для рейда (чем выше в списке, тем выше приоритет)
+            const classPriority = {
+                'Паладин': 1,
+                'Жрец': 2,
+                'Друид': 3,
+                'Шаман': 4,
+                'Монах': 5,
+                'Рыцарь смерти': 6,
+                'Воин': 7,
+                'Охотник на демонов': 8,
+                'Охотник': 9,
+                'Разбойник': 10,
+                'Маг': 11,
+                'Чернокнижник': 12,
+                'Пробудитель': 13
+            };
             
             // Добавление нового игрока
             addPlayerBtn.addEventListener('click', function() {
                 addPlayerRow();
+                updateSummary();
+                saveData();
+            });
+            
+            // Очистка всех данных
+            clearDataBtn.addEventListener('click', function() {
+                if (confirm('Вы уверены, что хотите удалить все данные? Это действие нельзя отменить.')) {
+                    clearAllData();
+                }
             });
             
             // Функция добавления строки игрока
@@ -167,6 +310,10 @@
                 nickInput.type = 'text';
                 nickInput.value = playerData.nick || '';
                 nickInput.placeholder = 'Введите ник';
+                nickInput.addEventListener('input', function() {
+                    updateSummary();
+                    saveData();
+                });
                 nickCell.appendChild(nickInput);
                 
                 // Класс
@@ -183,6 +330,10 @@
                     classSelect.appendChild(option);
                 });
                 classSelect.value = playerData.class || '';
+                classSelect.addEventListener('change', function() {
+                    updateSummary();
+                    saveData();
+                });
                 classCell.appendChild(classSelect);
                 
                 // Роль
@@ -198,6 +349,10 @@
                     roleSelect.appendChild(option);
                 });
                 roleSelect.value = playerData.role || '';
+                roleSelect.addEventListener('change', function() {
+                    updateSummary();
+                    saveData();
+                });
                 roleCell.appendChild(roleSelect);
                 
                 // Уровень предметов
@@ -207,6 +362,10 @@
                 ilvlInput.min = 0;
                 ilvlInput.value = playerData.ilvl || '';
                 ilvlInput.placeholder = 'Уровень предметов';
+                ilvlInput.addEventListener('input', function() {
+                    updateSummary();
+                    saveData();
+                });
                 ilvlCell.appendChild(ilvlInput);
                 
                 // Уровень игры
@@ -214,14 +373,18 @@
                 const skillSelect = document.createElement('select');
                 skillLevels.forEach(level => {
                     const option = document.createElement('option');
-                    option.value = level;
-                    option.textContent = level;
-                    if (playerData.skill === level) {
+                    option.value = level.name;
+                    option.textContent = level.name;
+                    if (playerData.skill === level.name) {
                         option.selected = true;
                     }
                     skillSelect.appendChild(option);
                 });
                 skillSelect.value = playerData.skill || '';
+                skillSelect.addEventListener('change', function() {
+                    updateSummary();
+                    saveData();
+                });
                 skillCell.appendChild(skillSelect);
                 
                 // Действия
@@ -232,13 +395,216 @@
                 deleteBtn.addEventListener('click', function() {
                     if (confirm('Удалить этого игрока?')) {
                         playersTable.deleteRow(row.rowIndex - 1);
+                        updateSummary();
+                        saveData();
                     }
                 });
                 actionsCell.appendChild(deleteBtn);
             }
             
-            // Добавляем первую строку по умолчанию
-            addPlayerRow();
+            // Функция сохранения данных в localStorage
+            function saveData() {
+                const players = getPlayersData();
+                localStorage.setItem('guildPlayers', JSON.stringify(players));
+                
+                // Показать статус сохранения
+                saveStatusEl.textContent = 'Данные сохранены';
+                setTimeout(() => {
+                    saveStatusEl.textContent = '';
+                }, 2000);
+            }
+            
+            // Функция загрузки данных из localStorage
+            function loadData() {
+                const savedData = localStorage.getItem('guildPlayers');
+                if (savedData) {
+                    const players = JSON.parse(savedData);
+                    
+                    // Очищаем таблицу, кроме заголовка
+                    const tbody = playersTable.querySelector('tbody');
+                    tbody.innerHTML = '';
+                    
+                    // Добавляем игроков из сохраненных данных
+                    players.forEach(player => {
+                        addPlayerRow(player);
+                    });
+                    
+                    updateSummary();
+                }
+            }
+            
+            // Функция очистки всех данных
+            function clearAllData() {
+                localStorage.removeItem('guildPlayers');
+                
+                // Очищаем таблицу, кроме заголовка
+                const tbody = playersTable.querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                // Добавляем пустую строку
+                addPlayerRow();
+                updateSummary();
+                
+                saveStatusEl.textContent = 'Все данные очищены';
+                setTimeout(() => {
+                    saveStatusEl.textContent = '';
+                }, 2000);
+            }
+            
+            // Функция обновления сводки
+            function updateSummary() {
+                const players = getPlayersData();
+                updateMissingClasses(players);
+                updateRoleStats(players);
+                updatePriorityList(players);
+            }
+            
+            // Получение данных игроков из таблицы
+            function getPlayersData() {
+                const rows = playersTable.querySelectorAll('tbody tr');
+                const players = [];
+                
+                rows.forEach(row => {
+                    const cells = row.cells;
+                    players.push({
+                        nick: cells[0].querySelector('input').value,
+                        class: cells[1].querySelector('select').value,
+                        role: cells[2].querySelector('select').value,
+                        ilvl: cells[3].querySelector('input').value,
+                        skill: cells[4].querySelector('select').value
+                    });
+                });
+                
+                return players;
+            }
+            
+            // Обновление списка отсутствующих классов
+            function updateMissingClasses(players) {
+                const presentClasses = new Set(players.map(p => p.class));
+                const missing = classes.filter(cls => !presentClasses.has(cls.name) && cls.name !== '');
+                
+                missingClassesEl.innerHTML = '';
+                
+                if (missing.length === 0) {
+                    missingClassesEl.innerHTML = '<p>Все классы представлены в гильдии!</p>';
+                    return;
+                }
+                
+                missing.forEach(cls => {
+                    const tag = document.createElement('div');
+                    tag.classList.add('class-tag', cls.color);
+                    tag.textContent = cls.name;
+                    missingClassesEl.appendChild(tag);
+                });
+            }
+            
+            // Обновление статистики по ролям
+            function updateRoleStats(players) {
+                const roleCount = {
+                    'Танк': 0,
+                    'Хил': 0,
+                    'ДД': 0
+                };
+                
+                players.forEach(player => {
+                    if (roleCount.hasOwnProperty(player.role)) {
+                        roleCount[player.role]++;
+                    }
+                });
+                
+                roleStatsEl.innerHTML = '';
+                
+                for (const role in roleCount) {
+                    const stat = document.createElement('div');
+                    stat.classList.add('role-stat');
+                    
+                    const count = document.createElement('span');
+                    count.textContent = roleCount[role];
+                    
+                    const label = document.createElement('div');
+                    label.textContent = role;
+                    
+                    stat.appendChild(count);
+                    stat.appendChild(label);
+                    roleStatsEl.appendChild(stat);
+                }
+            }
+            
+            // Обновление приоритетного списка игроков
+            function updatePriorityList(players) {
+                // Фильтруем игроков с заполненными данными
+                const validPlayers = players.filter(p => p.nick && p.class && p.role && p.skill);
+                
+                // Сортируем по уровню игры (по убыванию) и приоритету класса
+                validPlayers.sort((a, b) => {
+                    // Сначала по уровню игры
+                    const aSkillValue = skillLevels.find(s => s.name === a.skill)?.value || 0;
+                    const bSkillValue = skillLevels.find(s => s.name === b.skill)?.value || 0;
+                    
+                    if (bSkillValue !== aSkillValue) {
+                        return bSkillValue - aSkillValue;
+                    }
+                    
+                    // Затем по приоритету класса
+                    const aClassPriority = classPriority[a.class] || 99;
+                    const bClassPriority = classPriority[b.class] || 99;
+                    
+                    return aClassPriority - bClassPriority;
+                });
+                
+                priorityListEl.innerHTML = '';
+                
+                if (validPlayers.length === 0) {
+                    priorityListEl.innerHTML = '<li>Нет данных об игроках для формирования приоритетного списка</li>';
+                    return;
+                }
+                
+                validPlayers.forEach(player => {
+                    const li = document.createElement('li');
+                    
+                    const playerInfo = document.createElement('div');
+                    playerInfo.innerHTML = `
+                        <strong>${player.nick}</strong> 
+                        <span class="${getClassColor(player.class)}">(${player.class})</span> 
+                        - ${player.role} 
+                        <span class="skill-badge skill-${getSkillClass(player.skill)}">${player.skill}</span>
+                    `;
+                    
+                    const ilvlInfo = document.createElement('div');
+                    ilvlInfo.textContent = `Ур. пред.: ${player.ilvl || 'N/A'}`;
+                    
+                    li.appendChild(playerInfo);
+                    li.appendChild(ilvlInfo);
+                    priorityListEl.appendChild(li);
+                });
+            }
+            
+            // Получение цвета для класса
+            function getClassColor(className) {
+                const cls = classes.find(c => c.name === className);
+                return cls ? cls.color : '';
+            }
+            
+            // Получение класса для уровня навыка
+            function getSkillClass(skill) {
+                switch(skill) {
+                    case 'Плохо': return 'poor';
+                    case 'Неплохо': return 'fair';
+                    case 'Хорошо': return 'good';
+                    case 'Отлично': return 'excellent';
+                    default: return '';
+                }
+            }
+            
+            // Загружаем данные при запуске
+            loadData();
+            
+            // Если нет сохраненных данных, добавляем первую строку
+            if (playersTable.querySelectorAll('tbody tr').length === 0) {
+                addPlayerRow();
+            }
+            
+            updateSummary();
         });
     </script>
 </body>
